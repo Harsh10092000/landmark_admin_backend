@@ -1,0 +1,358 @@
+import { db } from "../connect.js";
+
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+
+// bcrypt.hash('admin', 10, (err, hash) => {
+//   console.log(hash);
+// });
+
+// Helper to get IP address
+function getIp(req) {
+  return req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress;
+}
+
+export const adminLogin = (req, res) => {
+  const { username, password } = req.body;
+  const userAgent = req.headers['user-agent'] || '';
+  const ip = getIp(req);
+
+  const q = "SELECT * FROM admin_login WHERE username = ? AND status = 'active'";
+  db.query(q, [username], async (err, results) => {
+    if (err) return res.status(500).json({ error: "DB error" });
+
+    if (results.length === 0) {
+      // Log failed attempt
+      db.query(
+        "INSERT INTO admin_login_logs (username, ip_address, user_agent, success) VALUES (?, ?, ?, ?)",
+        [username, ip, userAgent, false]
+      );
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const admin = results[0];
+    const match = await bcrypt.compare(password, admin.password);
+
+    // Log attempt
+    db.query(
+      "INSERT INTO admin_login_logs (admin_id, username, ip_address, user_agent, success) VALUES (?, ?, ?, ?, ?)",
+      [admin.id, username, ip, userAgent, match]
+    );
+
+    if (!match) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // Update last_login
+    db.query("UPDATE admin_login SET last_login = NOW() WHERE id = ?", [admin.id]);
+
+    // Generate JWT token
+    const token = jwt.sign({ id: admin.id, username: admin.username }, "your_jwt_secret", { expiresIn: "1d" });
+
+    // Set JWT token as HTTP-only cookie
+    res.cookie('adminToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // Use secure in production
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000 // 1 day
+    });
+
+    // Return user info (omit password)
+    const { password: _, ...adminData } = admin;
+    res.status(200).json({ success: true, admin: adminData });
+  });
+};
+
+// export const fetchAll = (req, res) => {
+//   const q =
+//     "SELECT property_module.*,login_module.* from property_module LEFT JOIN login_module ON login_module.login_id = property_module.pro_user_id ORDER BY pro_id DESC";
+//   db.query(q, (err, data) => {
+//     if (err) return res.status(500).json(err);
+//     return res.status(200).json(data);
+//   });
+// };
+
+export const fetchAll = (req, res) => {
+  const q =
+    "SELECT property_module.*,users.* from property_module LEFT JOIN users ON users.id = property_module.pro_user_id ORDER BY pro_id DESC";
+  db.query(q, (err, data) => {
+    if (err) return res.status(500).json(err);
+    return res.status(200).json(data);
+  });
+};
+
+export const deleteProperty = (req, res) => {
+  const q =
+    "DELETE property_module.*,property_module_images.* from property_module LEFT JOIN property_module_images ON property_module_images.img_cnct_id = property_module.pro_id WHERE pro_id = ?";
+  db.query(q, [req.params.proId], (err, data) => {
+    if (err) return res.status(500).json(err);
+    return res.status(200).json("DELETED");
+  });
+};
+export const fetchInterested = (req, res) => {
+  // const q =
+  //   "SELECT  property_interest.*, property_module.*, login_module.* FROM property_interest LEFT JOIN login_module ON property_interest.interest_person_id = login_module.login_id left join property_module on property_interest.interest_property_id = property_module.pro_id ORDER BY pro_id DESC";
+  const q = "SELECT  property_interest.*, property_module.*FROM property_interest left join property_module on property_interest.interest_property_id = property_module.pro_id ORDER BY pro_id DESC;"
+ 
+    db.query(q, (err, data) => {
+    if (err) return res.status(500).json(err);
+    return res.status(200).json(data);
+  });
+};
+export const fetchUsers = (req, res) => {
+  const q = "SELECT * from users";
+  db.query(q, (err, data) => {
+    if (err) return res.status(500).json(err);
+    return res.status(200).json(data);
+  });
+};
+
+
+
+
+
+export const fetchUsers1 = (req, res) => {
+  const q = `SELECT 
+  login.*, 
+  agent.agent_type, 
+  property_count.count_of_properties,
+  property_module.pro_user_id,
+  property_module.pro_auto_inactive,
+  pro_count.pro_count, 
+  pro_count.pro_creation_date, 
+  DATEDIFF(CONVERT_TZ(pro_count.pro_creation_date, '+00:00', '+05:30'), CONVERT_TZ(NOW(), '+00:00', '+05:30')) AS Days
+FROM 
+  login_module AS login 
+LEFT JOIN 
+  agent_module AS agent ON agent.user_cnct_id = login.login_id 
+LEFT JOIN 
+  property_module ON login.login_id = property_module.pro_user_id
+LEFT JOIN 
+  (SELECT 
+     pro_user_id,
+     COUNT(pro_id) AS count_of_properties 
+   FROM 
+     property_module 
+   GROUP BY 
+     pro_user_id
+  ) AS property_count ON login.login_id = property_count.pro_user_id 
+LEFT JOIN 
+  (SELECT 
+     pro_user_id,
+     COUNT(pro_id) AS pro_count, 
+     pro_creation_date
+   FROM 
+     property_module 
+   WHERE 
+     DATEDIFF(pro_creation_date, CONVERT_TZ(NOW(), '+00:00', '+05:30')) > -30 
+   GROUP BY 
+     pro_user_id
+  ) AS pro_count ON login.login_id = pro_count.pro_user_id group by login.login_id
+ORDER BY 
+  login.login_id DESC;`;
+  db.query(q, (err, data) => {
+    if (err) return res.status(500).json(err);
+    return res.status(200).json(data);
+  });
+};
+
+
+
+
+export const fetchShorlist = (req, res) => {
+  const q =
+    "SELECT  shortlist_module.*, property_module.*, login_module.* FROM shortlist_module LEFT JOIN login_module ON shortlist_module.shortlist_cnct_id = login_module.login_id left join property_module on shortlist_module.shortlist_pro_id = property_module.pro_id ORDER BY pro_id DESC";
+  db.query(q, (err, data) => {
+    if (err) return res.status(500).json(err);
+    return res.status(200).json(data);
+  });
+};
+
+
+
+// };
+
+
+export const grantAccessToListProperty = (req, res) => {
+  console.log(req.body)
+  const q =
+    "UPDATE login_module SET is_lifetime_free = TRUE WHERE login_id = ?";
+    const values = [req.body];
+    db.query(q, [values], (err, data) => {
+      console.log(values);
+      if (err) return res.status(500).json(err);
+      const q1 =
+      "INSERT INTO lifetime_access_log (user_id, payment_status) VALUES (?)";
+      const values1 = [
+        req.body,
+        "granted"
+      ]
+      db.query(q1, [values1], (err, data) => {
+        if (err) return res.status(500).json(err);
+        return res.status(200).json("Added Successfully");
+      });
+    });
+};
+
+
+export const revokeAccessToListProperty = (req, res) => {
+  console.log(req.body)
+  const q =
+    "UPDATE login_module SET is_lifetime_free = FALSE WHERE login_id = ?";
+    const values = [req.body];
+    db.query(q, [values], (err, data) => {
+      console.log(values);
+      if (err) return res.status(500).json(err);
+      const q1 =
+      "INSERT INTO lifetime_access_log (user_id, payment_status) VALUES (?)";
+      const values1 = [
+        req.body,
+        "revoked"
+      ]
+      db.query(q1, [values1], (err, data) => {
+        if (err) return res.status(500).json(err);
+        return res.status(200).json("Added Successfully");
+      });
+    });
+};
+
+
+
+export const addProListingCoupon = (req, res) => {
+
+  const q =
+    "INSERT INTO pro_listing_coupon_module ( coupon_code, coupon_name, coupon_amt, coupon_valid_from, coupon_valid_till, coupon_status) Values (?)";
+  const values = [
+    req.body.pro_coupon_code,
+    req.body.pro_coupon_name,
+    req.body.pro_coupon_amt,
+    req.body.pro_coupon_valid_form,
+    req.body.pro_coupon_valid_till,
+    "1",
+    //req.body.pro_coupon_validity,
+    //req.body.pro_coupon_list_no
+  ];
+    db.query(q, [values], (err, data) => {
+      console.log(values);
+      if (err) return res.status(500).json(err);
+      return res.status(200).json("Added Successfully");
+    });
+};
+
+
+export const updateProListingCoupon = (req, res) => {
+  const q =
+    "UPDATE pro_listing_coupon_module SET coupon_code = ?, coupon_name = ?, coupon_amt = ?, coupon_valid_from = ? , coupon_valid_till = ? WHERE coupon_id = ?"
+  const values = [
+    req.body.pro_coupon_code,
+    req.body.pro_coupon_name,
+    req.body.pro_coupon_amt,
+    req.body.pro_coupon_valid_form,
+    req.body.pro_coupon_valid_till,
+    req.body.coupon_id,
+  ];
+    db.query(q, values, (err, data) => {
+      console.log(values);
+      if (err) return res.status(500).json(err);
+      return res.status(200).json("Updated Successfully");
+    });
+};
+
+export const fetchCouponDataById = (req, res) => {
+  const q = "SELECT * FROM pro_listing_coupon_module where coupon_id = ?";
+  db.query(q, [req.params.couponId], (err, data) => {
+    if (err) return res.status(500).json(err);
+    return res.status(200).json(data);
+  });
+};
+
+
+export const fetchCouponData = (req, res) => {
+  const q = "SELECT pro_listing_coupon_module.*,  IF( DATEDIFF(coupon_valid_till, CONVERT_TZ(NOW(), '+00:00', '+05:30')) = 0, '0', '1') as status FROM pro_listing_coupon_module;";
+  db.query(q, (err, data) => {
+    if (err) return res.status(500).json(err);
+    return res.status(200).json(data);
+  });
+};
+
+
+export const deleteCoupon = (req, res) => {
+  const q =
+    "DELETE pro_listing_coupon_module from pro_listing_coupon_module WHERE coupon_id = ?";
+  db.query(q, [req.params.couponId], (err, data) => {
+    if (err) return res.status(500).json(err);
+    return res.status(200).json("DELETED");
+  });
+};
+
+
+export const updateCouponStatus = (req, res) => {
+  const q = "UPDATE pro_listing_coupon_module SET coupon_status = ? WHERE coupon_id = ?";
+  const values = [req.body.coupon_status, req.body.coupon_id];
+  db.query(q, values, (err, data) => {
+    console.log(values);
+    if (err) return res.status(500).json(err);
+    return res.status(200).json("Updated Successfully");
+  });
+};
+
+
+export const fetchCouponCode = (req, res) => {
+  const q = "SELECT * FROM pro_listing_coupon_module where coupon_code = ? and coupon_status = 1 and DATEDIFF(coupon_valid_till, CONVERT_TZ(NOW(), '+00:00', '+05:30')) != 0";
+  db.query(q, [req.params.couponCode], (err, data) => {
+    if (err) return res.status(500).json(err);
+    return res.status(200).json(data);
+  });
+};
+
+
+
+export const fetchDefaultInactiveDuration = (req, res) => {
+  const q = "SELECT * FROM u747016719_propertyease.default_pro_inactive;";
+  db.query(q, (err, data) => {
+    if (err) return res.status(500).json(err);
+    return res.status(200).json(data);
+  });
+};
+
+export const checkSession = (req, res) => {
+  // Check if admin session exists (you can use JWT token or session)
+  // For now, we'll check if there's a valid JWT token in cookies/headers
+  const token = req.cookies?.adminToken || req.headers?.authorization?.split(' ')[1];
+  
+  if (!token) {
+    return res.status(401).json({ success: false, message: "No session found" });
+  }
+
+  try {
+    // Verify JWT token
+    const decoded = jwt.verify(token, "your_jwt_secret");
+    
+    // Get admin data from database
+    const q = "SELECT id, username, name, email, created_at, updated_at, last_login, status FROM admin_login WHERE id = ? AND status = 'active'";
+    db.query(q, [decoded.id], (err, results) => {
+      if (err) {
+        return res.status(500).json({ success: false, message: "Database error" });
+      }
+      
+      if (results.length === 0) {
+        return res.status(401).json({ success: false, message: "Admin not found" });
+      }
+      
+      const admin = results[0];
+      res.status(200).json({ success: true, admin });
+    });
+  } catch (err) {
+    return res.status(401).json({ success: false, message: "Invalid session" });
+  }
+};
+
+export const logout = (req, res) => {
+  // Clear the session/token
+  res.clearCookie('adminToken');
+  db.end();
+  res.status(200).json({ success: true, message: "Logged out successfully" });
+};
+
+
+

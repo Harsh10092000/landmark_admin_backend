@@ -33,6 +33,10 @@ export const adminLogin = (req, res) => {
     const admin = results[0];
     const match = await bcrypt.compare(password, admin.password);
 
+    console.log(match);
+    console.log("password : " , password);
+    console.log("admin.password : " ,  admin.password);
+
     // Log attempt
     db.query(
       "INSERT INTO admin_login_logs (admin_id, username, ip_address, user_agent, success) VALUES (?, ?, ?, ?, ?)",

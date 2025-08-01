@@ -64,15 +64,9 @@ import {
   fetchRespondentByUser,
   fetchRespondentByPro,
   extendPropertyRenewDate,
-  
   getPropertyById
-  
-  
-
 } from "../controllers/property.js";
 
-import { verifyJwt } from "../controllers/verifyjwt.js";
-import { verifySession } from "../middleware/verifySession.js";
 
 const router = express.Router();
 

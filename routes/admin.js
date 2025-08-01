@@ -17,7 +17,9 @@ import {
   fetchDefaultInactiveDuration,
   adminLogin,
   checkSession,
-  logout
+  logout,
+  sendOtp,
+  updatePassword
 } from "../controllers/admin.js";
 import { deleteProperty } from "../controllers/admin.js";
 import { checkCouponStatus } from "../middleware/checkcouponvalidity.js";
@@ -27,6 +29,8 @@ const router = express.Router();
 router.post("/adminlogin", adminLogin);
 router.get("/checkSession", checkSession);
 router.post("/logout", logout);
+router.post("/send-otp", sendOtp);
+router.post("/update-password", updatePassword);
 router.get("/fetchAll", fetchAll);
 router.delete("/deletePro/:proId", deleteProperty);
 router.get("/fetchInterested", fetchInterested);

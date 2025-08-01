@@ -1,5 +1,5 @@
 import { db } from "../connect.js";
-
+import { transporter } from "../nodemailer.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
@@ -352,6 +352,113 @@ export const logout = (req, res) => {
   res.clearCookie('adminToken');
   db.end();
   res.status(200).json({ success: true, message: "Logged out successfully" });
+};
+
+// Send OTP for password change
+export const sendOtp = (req, res) => {
+    const { email } = req.body;
+    
+    if (!email) {
+        return res.status(400).json({ success: false, message: "Email is required" });
+    }
+
+    // Check if admin exists
+    const q = "SELECT * FROM admin_login WHERE email = ? OR username = ?";
+    db.query(q, [email, email], async (err, admin) => {
+        if (err) {
+            console.error("Error checking admin:", err);
+            return res.status(500).json({ success: false, message: "Database error" });
+        }
+        
+        if (admin.length === 0) {
+            return res.status(404).json({ success: false, message: "Admin not found" });
+        }
+
+        // Generate 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
+
+        // Store OTP in database
+        const insertQ = "INSERT INTO admin_otp (email, otp, expiry_time, created_at) VALUES (?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE otp = ?, expiry_time = ?, created_at = NOW()";
+        db.query(insertQ, [email, otp, otpExpiry, otp, otpExpiry], async (err) => {
+            if (err) {
+                console.error("Error storing OTP:", err);
+                return res.status(500).json({ success: false, message: "Failed to store OTP" });
+            }
+
+            // Send email with OTP
+            try {
+                const mailOptions = {
+                    from: process.env.EMAIL,
+                    to: email,
+                    subject: "Password Change OTP - Landmark Plots Admin",
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center;">
+                                <h2 style="color: #1976d2; margin-bottom: 20px;">Password Change Request</h2>
+                                <p style="color: #666; margin-bottom: 20px;">You have requested to change your password. Use the OTP below to complete the process:</p>
+                                <div style="background: #1976d2; color: white; padding: 15px; border-radius: 6px; font-size: 24px; font-weight: bold; letter-spacing: 3px; margin: 20px 0;">
+                                    ${otp}
+                                </div>
+                                <p style="color: #666; font-size: 14px;">This OTP will expire in 10 minutes.</p>
+                                <p style="color: #666; font-size: 14px; margin-top: 20px;">If you didn't request this, please ignore this email.</p>
+                            </div>
+                        </div>
+                    `
+                };
+
+                await transporter.sendMail(mailOptions);
+                console.log(`OTP sent to ${email}: ${otp}`);
+                res.json({ success: true, message: "OTP sent successfully" });
+            } catch (emailError) {
+                console.error("Error sending email:", emailError);
+                res.status(500).json({ success: false, message: "Failed to send OTP email" });
+            }
+        });
+    });
+};
+
+// Verify OTP and update password
+export const updatePassword = (req, res) => {
+    const { email, otp, newPassword } = req.body;
+    
+    if (!email || !otp || !newPassword) {
+        return res.status(400).json({ success: false, message: "Email, OTP, and new password are required" });
+    }
+
+    // Verify OTP
+    const verifyQ = "SELECT * FROM admin_otp WHERE email = ? AND otp = ? AND expiry_time > NOW() ORDER BY created_at DESC LIMIT 1";
+    db.query(verifyQ, [email, otp], async (err, otpData) => {
+        if (err) {
+            console.error("Error verifying OTP:", err);
+            return res.status(500).json({ success: false, message: "Database error" });
+        }
+
+        if (otpData.length === 0) {
+            return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // Update password
+        const updateQ = "UPDATE admin_login SET password = ?, updated_at = NOW() WHERE email = ? OR username = ?";
+        db.query(updateQ, [hashedPassword, email, email], (err) => {
+            if (err) {
+                console.error("Error updating password:", err);
+                return res.status(500).json({ success: false, message: "Failed to update password" });
+            }
+
+            // Delete used OTP
+            const deleteQ = "DELETE FROM admin_otp WHERE email = ? AND otp = ?";
+            db.query(deleteQ, [email, otp], (err) => {
+                if (err) {
+                    console.error("Error deleting OTP:", err);
+                }
+                res.json({ success: true, message: "Password updated successfully" });
+            });
+        });
+    });
 };
 
 

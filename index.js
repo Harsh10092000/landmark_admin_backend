@@ -9,7 +9,6 @@ import authAgent from "./routes/agent.js"
 import authAd from "./routes/ad.js"
 import authProPlan from "./routes/proPlan.js"
 import authMap from "./routes/map.js"
-import authPay from "./routes/pay.js"
 import authMailDigest from "./routes/maildigest.js"
 import authSettings from "./routes/settings.js"
 import authInvite from "./routes/invite.js";
@@ -45,7 +44,6 @@ app.use(express.static("./public"));
   app.use("/api/ad", authAd);
   app.use("/api/proPlan", authProPlan);
   app.use("/api/cityMap", authMap);
-  app.use("/api/pay", authPay);
   app.use("/api/setting", authSettings);
   app.use("/api/maildigest", authMailDigest);
   app.use("/api/invite", authInvite);

@@ -23,9 +23,9 @@ const app = express();
 app.use(cors({
   origin: [
     'http://localhost:5173',
-    'http://localhost:4176',
-    'https://user.landmarkplots.com',
-    'https://landmarkplots.com' // <-- add production frontend
+    'http://localhost:4177',
+    'https://admin.landmarkplots.com/',
+    'https://adminapi.landmarkplots.com/' // <-- add production frontend
   ],
   credentials: true,
 }));

@@ -52,6 +52,6 @@ app.use(express.static("./public"));
   app.use("/api/proemovalsetting", authAuroRemovalProperty);
 
   app.use("/api/listing", authListing);
-  app.listen(8010, () => {
+  app.listen(8016, () => {
     console.log("App is running ");
   });

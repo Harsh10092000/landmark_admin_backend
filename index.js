@@ -24,8 +24,8 @@ app.use(cors({
   origin: [
     'http://localhost:5173',
     'http://localhost:4177',
-    'https://admin.landmarkplots.com/',
-    'https://adminapi.landmarkplots.com/' // <-- add production frontend
+    'https://admin.landmarkplots.com',
+    'https://adminapi.landmarkplots.com' // <-- add production frontend
   ],
   credentials: true,
 }));

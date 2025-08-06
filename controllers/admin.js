@@ -3,9 +3,9 @@ import { transporter } from "../nodemailer.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
-// bcrypt.hash('admin', 10, (err, hash) => {
-//   console.log(hash);
-// });
+bcrypt.hash('admin', 10, (err, hash) => {
+  console.log(hash);
+});
 
 // Helper to get IP address
 function getIp(req) {
@@ -32,10 +32,6 @@ export const adminLogin = (req, res) => {
 
     const admin = results[0];
     const match = await bcrypt.compare(password, admin.password);
-
-    console.log(match);
-    console.log("password : " , password);
-    console.log("admin.password : " ,  admin.password);
 
     // Log attempt
     db.query(

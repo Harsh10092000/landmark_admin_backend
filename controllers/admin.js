@@ -31,7 +31,13 @@ export const adminLogin = (req, res) => {
     }
 
     const admin = results[0];
-    const match = await bcrypt.compare(password, admin.password);
+    let match = false;
+    try {
+      match = await bcrypt.compare(password, admin.password);
+    } catch (compareError) {
+      console.error("bcrypt compare failed:", compareError);
+      match = false;
+    }
 
     // Log attempt
     db.query(
@@ -350,7 +356,8 @@ export const checkSession = (req, res) => {
 export const logout = (req, res) => {
   // Clear the session/token
   res.clearCookie('adminToken');
-  db.end();
+  // Do NOT close the DB pool here; it breaks all future queries
+  // db.end();
   res.status(200).json({ success: true, message: "Logged out successfully" });
 };
 

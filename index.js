@@ -14,6 +14,7 @@ import authSettings from "./routes/settings.js"
 import authInvite from "./routes/invite.js";
 import authAuroRemovalProperty from "./routes/autoRemovePro.js"
 import authListing from "./routes/listing.js"
+import authMarketing from "./routes/marketing.js"
 
 const app = express();
 // var corsOptions = {
@@ -35,21 +36,22 @@ app.use(express.json());
 //   credentials: true,
 // }));
 app.use(express.static("./public"));
-  app.use("/api/act", authAccount);
-  app.use("/api/pro", authProperty);
-  app.use("/api/contact", authContact);
-  app.use("/api/admin", authAdmin);
-  app.use("/api/postRequirement", authPostRequirement);
-  app.use("/api/agent", authAgent);
-  app.use("/api/ad", authAd);
-  app.use("/api/proPlan", authProPlan);
-  app.use("/api/cityMap", authMap);
-  app.use("/api/setting", authSettings);
-  app.use("/api/maildigest", authMailDigest);
-  app.use("/api/invite", authInvite);
-  app.use("/api/proemovalsetting", authAuroRemovalProperty);
+app.use("/api/act", authAccount);
+app.use("/api/pro", authProperty);
+app.use("/api/contact", authContact);
+app.use("/api/admin", authAdmin);
+app.use("/api/postRequirement", authPostRequirement);
+app.use("/api/agent", authAgent);
+app.use("/api/ad", authAd);
+app.use("/api/proPlan", authProPlan);
+app.use("/api/cityMap", authMap);
+app.use("/api/setting", authSettings);
+app.use("/api/maildigest", authMailDigest);
+app.use("/api/invite", authInvite);
+app.use("/api/proemovalsetting", authAuroRemovalProperty);
 
-  app.use("/api/listing", authListing);
-  app.listen(8016, () => {
-    console.log("App is running ");
-  });
+app.use("/api/listing", authListing);
+app.use("/api/marketing", authMarketing);
+app.listen(8016, () => {
+  console.log("App is running ");
+});
